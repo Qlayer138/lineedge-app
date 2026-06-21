@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LineEdge — Live Odds Dashboard</title>
+<style>
+  :root {
+    --bg: #11151C;
+    --panel: #1A2030;
+    --border: #2A3142;
+    --amber: #FFAA33;
+    --amber-bg: rgba(255,170,51,0.10);
+    --green: #5FD46B;
+    --green-bg: rgba(95,212,107,0.12);
+    --blue: #5B8DEF;
+    --blue-bg: rgba(91,141,239,0.12);
+    --red: #D9594C;
+    --text: #E7EAF0;
+    --muted: #7C8597;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .mono { font-family: 'SF Mono', 'Courier New', monospace; }
+  .wrap { max-width: 480px; margin: 0 auto; padding-bottom: 3rem; }
+  header {
+    padding: 1.1rem 1rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: 0.03em; margin: 0; text-transform: uppercase; }
+  h1 span { color: var(--amber); }
+  .status { display: flex; align-items: center; gap: 0.4rem; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: pulse 2s ease-in-out infinite; }
+  .dot.live { background: var(--green); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .meta { padding: 0.5rem 1rem 0; font-size: 0.72rem; color: var(--muted); }
+  .filters-row { display: flex; gap: 0.6rem; align-items: center; padding: 0.8rem 1rem 0.2rem; }
+  .date-input {
+    flex-shrink: 0; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font-size: 0.74rem; font-family: inherit;
+  }
+  .date-clear {
+    flex-shrink: 0; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-size: 0.68rem; cursor: pointer; text-transform: uppercase;
+  }
+  .sport-tabs { display: flex; gap: 0.4rem; padding: 0.6rem 1rem 0.8rem; overflow-x: auto; }
+  .chip {
+    padding: 0.35rem 0.8rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; cursor: pointer;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+  }
+  .chip.active { border-color: var(--amber); background: var(--amber-bg); color: var(--amber); }
+  .games { padding: 0 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .card-head { padding: 0.8rem 1rem 0.6rem; }
+  .card-tag { font-size: 0.65rem; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: 0.04em; }
+  .card-time { font-size: 0.68rem; color: var(--muted); float: right; }
+  .matchup { font-weight: 600; font-size: 0.92rem; margin-top: 0.4rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; text-align: left; padding: 0.4rem; }
+  th.r, td.r { text-align: right; }
+  td { padding: 0.4rem; font-size: 0.74rem; border-top: 1px solid var(--border); }
+  tr.fair { background: var(--blue-bg); }
+  tr.fair td { color: var(--blue); font-weight: 700; font-size: 0.62rem; text-transform: uppercase; }
+  tr.fair td.price { font-size: 0.78rem; }
+  tr.best { background: var(--amber-bg); }
+  .price { font-weight: 700; color: var(--amber); }
+  .ev-pos { color: var(--green); font-weight: 700; }
+  .ev-neg { color: var(--red); font-weight: 700; }
+  .ev-flat { color: var(--muted); }
+  .empty, .error { padding: 2rem 1rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
+  .error { color: var(--red); }
+  .retry {
+    margin-top: 0.7rem; display: inline-block; padding: 0.5rem 1rem; border-radius: 8px;
+    border: 1px solid var(--blue); background: var(--blue-bg); color: var(--blue);
+    font-size: 0.74rem; font-weight: 700; text-transform: uppercase; cursor: pointer;
+  }
+  footer { padding: 1.5rem 1rem 0; font-size: 0.68rem; color: var(--muted); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Line<span>Edge</span></h1>
+    <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Connecting…</span></div>
+  </header>
+  <p class="meta" id="metaLine"></p>
+  <div class="filters-row">
+    <input type="date" id="dateFilter" class="date-input" onchange="onDateChange()" />
+    <button class="date-clear" onclick="clearDate()">Clear date</button>
+  </div>
+  <div class="sport-tabs" id="sportTabs"></div>
+  <div class="games" id="gamesList"><div class="empty">Loading odds…</div></div>
+  <footer>
+    Fair odds are no-vig, benchmarked against Pinnacle when available. This is a minimal
+    read-only dashboard for testing the <code>/api/v1/odds</code> backend — the full LineEdge
+    app (props, parlay builder, AI scans) lives in the React artifact.
+  </footer>
+</div>
+
+<script>
+  let allGames = [];
+  let activeSport = "All";
+  let activeDate = ""; // "YYYY-MM-DD" or "" for all dates
+
+  function onDateChange() {
+    activeDate = document.getElementById("dateFilter").value;
+    renderGames();
+  }
+  function clearDate() {
+    activeDate = "";
+    document.getElementById("dateFilter").value = "";
+    renderGames();
+  }
+  function gameLocalDateKey(game) {
+    if (!game.commenceTime) return null;
+    const d = new Date(game.commenceTime);
+    // Local YYYY-MM-DD so it lines up with what a <input type="date"> picker produces.
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function americanFmt(n) {
+    if (n == null || Number.isNaN(n)) return "—";
+    return n > 0 ? "+" + n : String(n);
+  }
+  function pctFmt(n) {
+    if (n == null || Number.isNaN(n)) return "—";
+    return (n > 0 ? "+" : "") + n.toFixed(1) + "%";
+  }
+  function toDecimal(american) {
+    return american > 0 ? 1 + american / 100 : 1 + 100 / Math.abs(american);
+  }
+  function probToAmerican(p) {
+    const d = 1 / p;
+    return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-100 / (d - 1));
+  }
+
+  // Same no-vig + EV math as the main app, kept in sync deliberately.
+  function computeGame(game) {
+    const ref = game.books.find(b => b.name === "Pinnacle") || game.books[0];
+    if (!ref) return null;
+    const implieds = {};
+    let total = 0;
+    game.outcomes.forEach(o => {
+      const price = ref.prices[o.key];
+      if (price == null) return;
+      const p = 1 / toDecimal(price);
+      implieds[o.key] = p;
+      total += p;
+    });
+    const fair = {};
+    game.outcomes.forEach(o => { if (implieds[o.key] != null) fair[o.key] = implieds[o.key] / total; });
+
+    const rows = [];
+    game.books.forEach(b => {
+      game.outcomes.forEach(o => {
+        const price = b.prices[o.key];
+        if (price == null || fair[o.key] == null) return;
+        const dec = toDecimal(price);
+        rows.push({
+          book: b.name, label: o.label, price,
+          ev: (fair[o.key] * dec - 1) * 100,
+          fairOdds: probToAmerican(fair[o.key]),
+        });
+      });
+    });
+    rows.sort((a, b) => b.ev - a.ev);
+
+    const fairLines = game.outcomes
+      .filter(o => fair[o.key] != null)
+      .map(o => ({ label: o.label, fairOdds: probToAmerican(fair[o.key]) }));
+
+    return { rows, fairLines };
+  }
+
+  function renderTabs() {
+    const sports = ["All", ...new Set(allGames.map(g => g.sport))];
+    const tabsEl = document.getElementById("sportTabs");
+    tabsEl.innerHTML = "";
+    sports.forEach(s => {
+      const chip = document.createElement("button");
+      chip.className = "chip" + (s === activeSport ? " active" : "");
+      chip.textContent = s;
+      chip.onclick = () => { activeSport = s; renderTabs(); renderGames(); };
+      tabsEl.appendChild(chip);
+    });
+  }
+
+  function renderGames() {
+    const list = document.getElementById("gamesList");
+    let filtered = activeSport === "All" ? allGames : allGames.filter(g => g.sport === activeSport);
+    if (activeDate) {
+      filtered = filtered.filter(g => gameLocalDateKey(g) === activeDate);
+    }
+    if (filtered.length === 0) {
+      const reason = activeDate ? `No games on ${activeDate}${activeSport !== "All" ? " for " + activeSport : ""}.` : "No games available right now.";
+      list.innerHTML = `<div class="empty">${reason}</div>`;
+      return;
+    }
+    list.innerHTML = "";
+    filtered.forEach(game => {
+      const computed = computeGame(game);
+      if (!computed || computed.rows.length === 0) return;
+      const card = document.createElement("div");
+      card.className = "card";
+
+      let rowsHtml = "";
+      computed.fairLines.forEach(fl => {
+        rowsHtml += `<tr class="fair"><td>Fair</td><td>${fl.label}</td><td class="r">—</td><td class="r price">${americanFmt(fl.fairOdds)}</td><td class="r">—</td></tr>`;
+      });
+      computed.rows.forEach((r, i) => {
+        const evClass = r.ev >= 1 ? "ev-pos" : r.ev <= -3 ? "ev-neg" : "ev-flat";
+        rowsHtml += `<tr class="${i === 0 ? "best" : ""}">
+          <td>${r.book}${r.book === "Pinnacle" ? " <span style='color:var(--muted);font-size:0.55rem'>SHARP</span>" : ""}</td>
+          <td style="color:var(--muted)">${r.label}</td>
+          <td class="r price">${americanFmt(r.price)}</td>
+          <td class="r" style="color:var(--blue);font-weight:700">${americanFmt(r.fairOdds)}</td>
+          <td class="r ${evClass}">${pctFmt(r.ev)}</td>
+        </tr>`;
+      });
+
+      card.innerHTML = `
+        <div class="card-head">
+          <span class="card-tag">${game.sport} · ${game.league || ""}</span>
+          <span class="card-time">${game.time || ""}</span>
+          <div class="matchup">${game.away} <span style="color:var(--muted)">@</span> ${game.home}</div>
+        </div>
+        <table>
+          <thead><tr><th>Book</th><th>Side</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>`;
+      list.appendChild(card);
+    });
+  }
+
+  function setStatus(state, text) {
+    const dot = document.getElementById("statusDot");
+    const label = document.getElementById("statusText");
+    dot.className = "dot" + (state === "live" ? " live" : "");
+    label.textContent = text;
+  }
+
+  async function loadOdds() {
+    setStatus("loading", "Connecting…");
+    document.getElementById("gamesList").innerHTML = '<div class="empty">Loading odds…</div>';
+    try {
+      const res = await fetch("/api/v1/odds");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Backend returned ${res.status}`);
+      }
+      const data = await res.json();
+      if (!Array.isArray(data.games) || data.games.length === 0) {
+        throw new Error("No games returned — check ODDS_API_KEY is set and sports are in season.");
+      }
+      allGames = data.games;
+      activeSport = "All";
+      setStatus("live", "Live odds");
+      const dateKeys = [...new Set(allGames.map(gameLocalDateKey).filter(Boolean))].sort();
+      const dateHint = dateKeys.length > 0 ? ` · games available ${dateKeys[0]}${dateKeys.length > 1 ? " to " + dateKeys[dateKeys.length - 1] : ""}` : "";
+      document.getElementById("metaLine").textContent =
+        `${allGames.length} games · fetched ${new Date(data.fetchedAt).toLocaleTimeString()}${dateHint}`;
+      renderTabs();
+      renderGames();
+    } catch (err) {
+      setStatus("error", "Connection failed");
+      document.getElementById("metaLine").textContent = "";
+      document.getElementById("sportTabs").innerHTML = "";
+      document.getElementById("gamesList").innerHTML =
+        `<div class="error">${err.message}<br/><button class="retry" onclick="loadOdds()">Retry</button></div>`;
+    }
+  }
+
+  loadOdds();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "lineedge-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LineEdge — live odds API + simple dashboard, deployed as one Vercel project. No build step required."
+}
